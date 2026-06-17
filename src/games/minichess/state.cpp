@@ -163,6 +163,7 @@ int State::evaluate(
         int oppn_mobility = 0;
         BaseState *tmp = this->create_null_state();
         if(tmp){
+            tmp->get_legal_actions();
             oppn_mobility = static_cast<int>(tmp->legal_actions.size());
             delete tmp;
         }
