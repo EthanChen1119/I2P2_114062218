@@ -170,6 +170,7 @@ int State::evaluate(
         bonus += 2 * (self_mobility - oppn_mobility);
     }
 
+    
     return self_score - oppn_score + bonus;
 }
 

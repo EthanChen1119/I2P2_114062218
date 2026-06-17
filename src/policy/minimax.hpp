@@ -7,8 +7,8 @@ struct MMParams {
     bool use_eval_mobility = true;
     bool report_partial = true;
 
-    bool use_PVS = false;
-    bool use_quie = false;
+    bool use_PVS = true;
+    bool use_quie = true;
     int quie_depth = 8;
 
     static MMParams from_map(const ParamMap& m){
