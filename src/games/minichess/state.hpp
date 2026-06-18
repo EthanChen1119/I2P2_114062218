@@ -51,8 +51,8 @@ public:
     ) override;
     State* next_state(const Move& move) override;
     void get_legal_actions() override;
-    void get_legal_actions_naive();
-    void get_legal_actions_bitboard();
+    void get_legal_actions_naive(bool stop_on_win = true);
+    void get_legal_actions_bitboard(bool stop_on_win = true);
     std::string encode_output() const override;
     std::string encode_state();
 

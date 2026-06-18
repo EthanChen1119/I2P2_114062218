@@ -158,16 +158,20 @@ int State::evaluate(
         // [ Hackathon TODO 1-5 ]
         // you can calculate mobility by legal actions size
         // bonus += 2 * (self_mobility - oppn_mobility);
-        this->get_legal_actions();
-        int self_mobility = static_cast<int>(this->legal_actions.size());
-        int oppn_mobility = 0;
-        BaseState *tmp = this->create_null_state();
-        if(tmp){
-            tmp->get_legal_actions();
-            oppn_mobility = static_cast<int>(tmp->legal_actions.size());
-            delete tmp;
-        }
-        bonus += 2 * (self_mobility - oppn_mobility);
+        State self_tmp(this->board, this->player);
+        State oppn_tmp(this->board, 1 - this->player);
+    #ifdef USE_BITBOARD
+        self_tmp.get_legal_actions_bitboard(false);
+        oppn_tmp.get_legal_actions_bitboard(false);
+    #else
+        self_tmp.get_legal_actions_naive(false);
+        oppn_tmp.get_legal_actions_naive(false);
+    #endif
+    
+        int self_mobility = static_cast<int>(self_tmp.legal_actions.size());
+        int oppn_mobility = static_cast<int>(oppn_tmp.legal_actions.size());
+        
+        bonus += 1 * (self_mobility - oppn_mobility);
     }
 
     
@@ -297,8 +301,10 @@ static const int move_table_king[8][2] = {
 /*============================================================
  * Naive move generation (array-based, branch-heavy)
  *============================================================*/
-void State::get_legal_actions_naive(){
+void State::get_legal_actions_naive(bool stop_on_win){
     this->game_state = NONE;
+    this->legal_actions.clear();
+
     std::vector<Move> all_actions;
     all_actions.reserve(64);
     auto self_board = this->board.board[this->player];
@@ -316,19 +322,28 @@ void State::get_legal_actions_naive(){
                                 all_actions.push_back(Move(Point(i, j), Point(i+1, j)));
                             }
                             if(j<BOARD_W-1 && (oppn_piece=oppn_board[i+1][j+1])>0){
-                                all_actions.push_back(Move(Point(i, j), Point(i+1, j+1)));
+                                Move move = Move(Point(i, j), Point(i+1, j+1));
+                                all_actions.push_back(move);
                                 if(oppn_piece==6){
                                     this->game_state = WIN;
-                                    this->legal_actions = all_actions;
-                                    return;
+                                    if(stop_on_win){
+                                        this->legal_actions.clear();
+                                        this->legal_actions.push_back(move);
+                                        return;
+                                    }
                                 }
                             }
                             if(j>0 && (oppn_piece=oppn_board[i+1][j-1])>0){
-                                all_actions.push_back(Move(Point(i, j), Point(i+1, j-1)));
+                                Move move = Move(Point(i, j), Point(i+1, j-1));
+                                all_actions.push_back(move);
                                 if(oppn_piece==6){
                                     this->game_state = WIN;
-                                    this->legal_actions = all_actions;
-                                    return;
+                                    
+                                    if(stop_on_win){
+                                        this->legal_actions.clear();
+                                        this->legal_actions.push_back(move);
+                                        return;
+                                    }
                                 }
                             }
                         }else if(!this->player && i>0){
@@ -337,19 +352,29 @@ void State::get_legal_actions_naive(){
                                 all_actions.push_back(Move(Point(i, j), Point(i-1, j)));
                             }
                             if(j<BOARD_W-1 && (oppn_piece=oppn_board[i-1][j+1])>0){
-                                all_actions.push_back(Move(Point(i, j), Point(i-1, j+1)));
+                                Move move = Move(Point(i, j), Point(i-1, j+1));
+                                all_actions.push_back(move);
                                 if(oppn_piece==6){
                                     this->game_state = WIN;
-                                    this->legal_actions = all_actions;
-                                    return;
+                                    
+                                    if(stop_on_win){
+                                        this->legal_actions.clear();
+                                        this->legal_actions.push_back(move);
+                                        return;
+                                    }
                                 }
                             }
                             if(j>0 && (oppn_piece=oppn_board[i-1][j-1])>0){
-                                all_actions.push_back(Move(Point(i, j), Point(i-1, j-1)));
+                                Move move = Move(Point(i, j), Point(i-1, j-1));
+                                all_actions.push_back(move);
                                 if(oppn_piece==6){
                                     this->game_state = WIN;
-                                    this->legal_actions = all_actions;
-                                    return;
+                                    
+                                    if(stop_on_win){
+                                        this->legal_actions.clear();
+                                        this->legal_actions.push_back(move);
+                                        return;
+                                    }
                                 }
                             }
                         }
@@ -378,18 +403,23 @@ void State::get_legal_actions_naive(){
                                     break;
                                 }
 
-                                all_actions.push_back(Move(Point(i, j), Point(p[0], p[1])));
+                                Move move = Move(Point(i, j), Point(p[0], p[1]));
+                                all_actions.push_back(move);
 
                                 oppn_piece = oppn_board[p[0]][p[1]];
                                 if(oppn_piece){
                                     if(oppn_piece==6){
                                         this->game_state = WIN;
-                                        this->legal_actions = all_actions;
-                                        return;
+                                        
+                                        if(stop_on_win){
+                                            this->legal_actions.clear();
+                                            this->legal_actions.push_back(move);
+                                            return;
+                                        }
                                     }else{
                                         break;
                                     }
-                                };
+                                }
                             }
                         }
                         break;
@@ -410,14 +440,19 @@ void State::get_legal_actions_naive(){
                                 continue;
                             }
 
-                            all_actions.push_back(Move(Point(i, j), Point(p[0], p[1])));
+                            Move move_1 = Move(Point(i, j), Point(p[0], p[1]));
+                            all_actions.push_back(move_1);
 
                             oppn_piece = oppn_board[p[0]][p[1]];
 
                             if(oppn_piece == 6){
                                 this->game_state = WIN;
-                                this->legal_actions = all_actions;
-                                return;
+                                
+                                if(stop_on_win){
+                                    this->legal_actions.clear();
+                                    this->legal_actions.push_back(move_1);
+                                    return;
+                                }
                             }
                         }
                         break;
@@ -433,14 +468,18 @@ void State::get_legal_actions_naive(){
                             if(now_piece){
                                 continue;
                             }
-
-                            all_actions.push_back(Move(Point(i, j), Point(p[0], p[1])));
+                            Move move_1 = Move(Point(i, j), Point(p[0], p[1]));
+                            all_actions.push_back(move_1);
 
                             oppn_piece = oppn_board[p[0]][p[1]];
                             if(oppn_piece==6){
                                 this->game_state = WIN;
-                                this->legal_actions = all_actions;
-                                return;
+
+                                if(stop_on_win){
+                                    this->legal_actions.clear();
+                                    this->legal_actions.push_back(move_1);
+                                    return;
+                                }
                             }
                         }
                         break;
@@ -533,7 +572,7 @@ static void bb_init(){
     bb_ready = true;
 }
 
-void State::get_legal_actions_bitboard(){
+void State::get_legal_actions_bitboard(bool stop_on_win){
     if(!bb_ready){
         bb_init();
     }
@@ -586,9 +625,12 @@ void State::get_legal_actions_bitboard(){
                     cap_scan &= cap_scan - 1;
                     if(oppn_pt[to] == 6){
                         this->game_state = WIN;
-                        this->legal_actions.push_back(
-                            Move(Point(r, c), Point(BB_ROW(to), BB_COL(to))));
-                        return;
+                        if(stop_on_win){
+                            this->legal_actions.clear();
+                            this->legal_actions.push_back(
+                                Move(Point(r, c), Point(BB_ROW(to), BB_COL(to))));
+                            return;
+                        }
                     }
                 }
                 targets = push | cap;
@@ -603,9 +645,13 @@ void State::get_legal_actions_bitboard(){
                     opp_targets &= opp_targets - 1;
                     if(oppn_pt[to] == 6){
                         this->game_state = WIN;
-                        this->legal_actions.push_back(
-                            Move(Point(r, c), Point(BB_ROW(to), BB_COL(to))));
-                        return;
+
+                        if(stop_on_win){
+                            this->legal_actions.clear();
+                            this->legal_actions.push_back(
+                                Move(Point(r, c), Point(BB_ROW(to), BB_COL(to))));
+                            return;
+                        }
                     }
                 }
                 break;
@@ -619,9 +665,13 @@ void State::get_legal_actions_bitboard(){
                     opp_targets &= opp_targets - 1;
                     if(oppn_pt[to] == 6){
                         this->game_state = WIN;
-                        this->legal_actions.push_back(
-                            Move(Point(r, c), Point(BB_ROW(to), BB_COL(to))));
-                        return;
+
+                        if(stop_on_win){
+                            this->legal_actions.clear();
+                            this->legal_actions.push_back(
+                                Move(Point(r, c), Point(BB_ROW(to), BB_COL(to))));
+                            return;
+                        }
                     }
                 }
                 break;
@@ -643,9 +693,15 @@ void State::get_legal_actions_bitboard(){
 
                         if((oppn_occ & to_bit) && oppn_pt[to] == 6){
                             this->game_state = WIN;
-                            this->legal_actions.push_back(
-                                Move(Point(r, c), Point(cr, cc)));
-                            return;
+                            if(stop_on_win){
+                                this->legal_actions.clear();
+                                this->legal_actions.push_back(
+                                    Move(Point(r, c), Point(cr, cc)));
+                                return;
+                            }
+
+                            targets |= to_bit;
+                            break;
                         }
 
                         targets |= to_bit;
@@ -675,9 +731,9 @@ void State::get_legal_actions_bitboard(){
  *============================================================*/
 void State::get_legal_actions(){
     #ifdef USE_BITBOARD
-    get_legal_actions_bitboard();
+    get_legal_actions_bitboard(true);
     #else
-    get_legal_actions_naive();
+    get_legal_actions_naive(true);
     #endif
 }
 
@@ -736,7 +792,11 @@ std::string State::encode_state(){
 
 BaseState* State::create_null_state() const{
     State* s = new State(this->board, 1 - this->player);
-    s->get_legal_actions();
+    
+    s->game_state = UNKNOWN;
+    s->legal_actions.clear();
+    s->zobrist_valid = false;
+
     return s;
 }
 
