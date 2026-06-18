@@ -251,7 +251,7 @@ int MiniMax::quiescence(
         return 0;
     }
 
-    int stand_pat = state->evaluate(p.use_kp_eval, p.use_eval_mobility, &history);
+    int stand_pat = state->evaluate(p.use_kp_eval, false, &history);
 
     if(quie_depth <= 0){
         return stand_pat;
