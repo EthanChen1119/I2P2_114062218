@@ -158,17 +158,32 @@ int State::evaluate(
         // [ Hackathon TODO 1-5 ]
         // you can calculate mobility by legal actions size
         // bonus += 2 * (self_mobility - oppn_mobility);
-        State self_tmp(this->board, this->player);
+        int self_mobility;
+
+        if(this->game_state != UNKNOWN){
+            self_mobility =
+                static_cast<int>(this->legal_actions.size());
+        }
+        else{
+            State self_tmp(this->board, this->player);
+
+        #ifdef USE_BITBOARD
+            self_tmp.get_legal_actions_bitboard(false);
+        #else
+            self_tmp.get_legal_actions_naive(false);
+        #endif
+
+            self_mobility = static_cast<int>(self_tmp.legal_actions.size());
+        }
+
         State oppn_tmp(this->board, 1 - this->player);
+
     #ifdef USE_BITBOARD
-        self_tmp.get_legal_actions_bitboard(false);
         oppn_tmp.get_legal_actions_bitboard(false);
     #else
-        self_tmp.get_legal_actions_naive(false);
         oppn_tmp.get_legal_actions_naive(false);
     #endif
 
-        int self_mobility = static_cast<int>(self_tmp.legal_actions.size());
         int oppn_mobility = static_cast<int>(oppn_tmp.legal_actions.size());
         
         bonus += 2 * (self_mobility - oppn_mobility);
@@ -889,4 +904,15 @@ bool State::check_repetition(const GameHistory& history, int& out_score) const {
         return true;
     }
     return false;
+}
+
+bool State::king_in_check() const {
+    State oppn_state(this->board, 1 - this->player);
+#ifdef USE_BITBOARD
+    oppn_state.get_legal_actions_bitboard(false);
+#else
+    oppn_state.get_legal_actions_naive(false);
+#endif
+
+    return oppn_state.game_state == WIN;
 }

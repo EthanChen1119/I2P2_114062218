@@ -251,28 +251,33 @@ int MiniMax::quiescence(
         return 0;
     }
 
+    bool in_danger = state->king_in_check();
+
     int stand_pat = state->evaluate(p.use_kp_eval, false, &history);
 
     if(quie_depth <= 0){
         return stand_pat;
     }
 
-    if(stand_pat >= beta){
-        return stand_pat;
+    if(!in_danger){
+        if(stand_pat >= beta){
+            return stand_pat;
+        }
+        if(stand_pat > alpha){
+            alpha = stand_pat;
+        }
     }
-    if(stand_pat > alpha){
-        alpha = stand_pat;
-    }
+    
 
     std::vector<Move> tac_moves;
 
     for(const Move& move : state->legal_actions){
-        if(is_capture_move(state, move) || pawn_to_queen(state, move)){
+        if(in_danger || is_capture_move(state, move) || pawn_to_queen(state, move)){
             tac_moves.push_back(move);
         }
     }
 
-    std::stable_sort(
+    std::sort(
         tac_moves.begin(),
         tac_moves.end(),
         [state](const Move& a, const Move& b){
@@ -342,6 +347,20 @@ SearchResult MiniMax::search(
 
     if(state->legal_actions.empty()){
         state->get_legal_actions();
+    }
+
+    if(state->game_state == WIN){
+        result.best_move = state->legal_actions.front();
+        result.score = P_MAX;
+        result.depth = depth;
+        result.nodes = ctx.nodes;
+        return result;
+    }
+    if(state->game_state == DRAW){
+        result.score = 0;
+        result.depth = depth;
+        result.nodes = ctx.nodes;
+        return result;
     }
 
     history.push(state->hash());

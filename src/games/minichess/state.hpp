@@ -79,4 +79,6 @@ public:
     int board_h() const override { return BOARD_H; }
     int board_w() const override { return BOARD_W; }
     const char* game_name() const override { return "MiniChess"; }
+
+    bool king_in_check() const;
 };
