@@ -9,7 +9,7 @@ struct MMParams {
 
     bool use_PVS = true;
     bool use_quie = true;
-    int quie_depth = 4;
+    int quie_depth = 3;
 
     static MMParams from_map(const ParamMap& m){
         MMParams p;
