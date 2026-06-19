@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cstdlib>
 
+
 #include "ubgi.hpp"
 #include "config.hpp"
 #include "search_types.hpp"
@@ -310,17 +311,26 @@ static void do_search(
     int depth_limit = (max_depth > 0) ? max_depth : 100;
     uint64_t total_nodes = 0;
 
-    auto search_start = std::chrono::high_resolution_clock::now();
+    auto search_start = std::chrono::steady_clock::now();
+    if(movetime_ms > 0){
+        int64_t safe_time_ms = movetime_ms * 80 / 100; // 80% of total time
+
+        ctx.has_deadline = true;
+        ctx.deadline = search_start + std::chrono::milliseconds(safe_time_ms);
+    }
+    else{
+        ctx.has_deadline = false;
+    }
 
     /* === Root move partial-result callback === */
     ctx.on_root_update = [&](const RootUpdate& upd){
         if(my_gen != g_search_gen.load()){
             return;
         }
-        best_move = upd.best_move;
+        // best_move = upd.best_move;
         g_best_move = upd.best_move;
 
-        auto now = std::chrono::high_resolution_clock::now();
+        auto now = std::chrono::steady_clock::now();
         int64_t elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
             now - search_start
         ).count();
@@ -343,19 +353,21 @@ static void do_search(
 
     int multi_pv = g_multi_pv;
 
+    int64_t previous_depth_ms = 0; //add
+
     for(int depth = 1; depth <= depth_limit; depth++){
         if(!alive()){
             break;
         }
 
-        auto depth_start = std::chrono::high_resolution_clock::now();
+        auto depth_start = std::chrono::steady_clock::now();
         SearchResult result = g_algo->search(&state, depth, history, ctx);
 
-        if(!alive() && depth > 1){
+        if(!alive() || ctx.stop){
             break;
         }
 
-        auto now = std::chrono::high_resolution_clock::now();
+        auto now = std::chrono::steady_clock::now();
         int64_t depth_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
             now - depth_start
         ).count();
@@ -422,7 +434,7 @@ static void do_search(
 
                 total_nodes += sub.nodes;
 
-                auto now2 = std::chrono::high_resolution_clock::now();
+                auto now2 = std::chrono::steady_clock::now();
                 int64_t total_ms2 = std::chrono::duration_cast<std::chrono::milliseconds>(
                     now2 - search_start
                 ).count();
@@ -455,17 +467,28 @@ static void do_search(
         if(!alive()){
             break;
         }
-        if(movetime_ms > 0 && total_ms * 2 >= movetime_ms){
-            break;
+
+        previous_depth_ms = depth_ms; //add
+        if(movetime_ms > 0){ //revise
+            int64_t soft_limit = movetime_ms * 80 / 100; // 80% of total time
+
+            int64_t estimated_next_depth = std::max<int64_t>(previous_depth_ms * 3, 10);
+
+            if(total_ms + estimated_next_depth >= soft_limit){
+                break;
+            }
         }
         if(result.score >= P_MAX - 100 || result.score <= M_MAX + 100){
             break;
         }
     }
 
-    if(alive()){
-        send("bestmove " + move_to_str(best_move));
-        g_bestmove_sent = true;
+    if(my_gen == g_search_gen.load()){ //revise
+        bool expected = false;
+
+        if(g_bestmove_sent.compare_exchange_strong(expected, true)){
+            send("bestmove " + move_to_str(best_move));
+        }
     }
     g_searching = false;
 }

@@ -15,7 +15,7 @@ namespace {
         0,
         100,
         500,
-        400,
+        300,
         300,
         900,
         10000
@@ -94,6 +94,11 @@ int MiniMax::eval_ctx(
     ctx.nodes++;
     if(ply > ctx.seldepth){
         ctx.seldepth = ply;
+    }
+    if((ctx.nodes & 2047ULL) == 0){
+        if(ctx.time_up()){
+            ctx.stop = true;
+        }
     }
     if(ctx.stop){
         return 0;
@@ -237,6 +242,11 @@ int MiniMax::quiescence(
     ctx.nodes++;
     if(ply > ctx.seldepth){
         ctx.seldepth = ply;
+    }
+    if((ctx.nodes & 2047ULL) == 0){
+        if(ctx.time_up()){
+            ctx.stop = true;
+        }
     }
     if(ctx.stop){
         return 0;

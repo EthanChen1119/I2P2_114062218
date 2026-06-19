@@ -4,6 +4,7 @@
 #include <vector>
 #include <cstdint>
 #include <functional>
+#include <chrono>
 
 class State;
 
@@ -19,9 +20,17 @@ struct SearchContext {
     uint64_t nodes = 0;
     int seldepth = 0;
     bool stop = false;
+
+    bool has_deadline = false;
+    std::chrono::steady_clock::time_point deadline;
+
     ParamMap params;
     std::function<void(const RootUpdate&)> on_root_update;
 
+    bool time_up() const {
+        return has_deadline && std::chrono::steady_clock::now() >= deadline;
+    }
+    
     void reset(){
         nodes = 0;
         seldepth = 0;

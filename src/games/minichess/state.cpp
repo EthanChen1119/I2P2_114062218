@@ -186,7 +186,7 @@ int State::evaluate(
 
         int oppn_mobility = static_cast<int>(oppn_tmp.legal_actions.size());
         
-        bonus += 2 * (self_mobility - oppn_mobility);
+        bonus += self_mobility - oppn_mobility;
     }
 
     
