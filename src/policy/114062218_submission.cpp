@@ -1,6 +1,6 @@
 #include <utility>
-#include "state.hpp"
-#include "minimax.hpp"
+#include "114062218_state.hpp"
+#include "114062218_submission.hpp"
 
 #include <algorithm>
 #include <vector>
