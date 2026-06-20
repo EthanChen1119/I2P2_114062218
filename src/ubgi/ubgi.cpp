@@ -32,7 +32,11 @@ static std::thread        g_search_thread;
 static std::mutex         g_io_mutex;
 static std::atomic<bool>  g_searching{false};
 static std::atomic<bool>  g_bestmove_sent{true};
-static Move               g_best_move;
+//static Move               g_best_move;
+static std::atomic<bool>  g_stop_requested{false};
+static std::mutex         g_best_move_mutex;
+static Move               g_completed_best_move;
+static Move               g_partial_best_move;
 static int                g_multi_pv = 1;
 
 
@@ -42,8 +46,33 @@ static void send(const std::string& msg){
     std::lock_guard<std::mutex> lock(g_io_mutex);
     std::cout << msg << std::endl;
 }
+// new function
+static void set_initial_best_move(const Move& move){
+    std::lock_guard<std::mutex> lock(g_best_move_mutex);
 
+    g_completed_best_move = move;
+    g_partial_best_move = move;
+}
 
+static void set_completed_best_move(const Move& move){
+    std::lock_guard<std::mutex> lock(g_best_move_mutex);
+
+    g_completed_best_move = move;
+    g_partial_best_move = move;
+}
+
+static void set_partial_best_move(const Move& move){
+    std::lock_guard<std::mutex> lock(g_best_move_mutex);
+
+    g_partial_best_move = move;
+}
+
+static Move get_completed_best_move(){
+    std::lock_guard<std::mutex> lock(g_best_move_mutex);
+
+    return g_completed_best_move;
+}
+//new function end
 /* === Move Conversion === */
 
 /* DROP_LETTERS is defined per-game in config.hpp for games with drops.
@@ -283,7 +312,7 @@ static void do_search(
         if(my_gen != g_search_gen.load()){
             return false;
         }
-        if(g_ctx.stop){
+        if(ctx.should_stop()){
             ctx.stop = true;
         }
         return !ctx.stop;
@@ -307,7 +336,7 @@ static void do_search(
     }
 
     Move best_move = state.legal_actions[0];
-    g_best_move = best_move;
+    set_initial_best_move(best_move); //new
     int depth_limit = (max_depth > 0) ? max_depth : 100;
     uint64_t total_nodes = 0;
 
@@ -321,6 +350,7 @@ static void do_search(
     else{
         ctx.has_deadline = false;
     }
+    ctx.external_stop = &g_stop_requested; //new
 
     /* === Root move partial-result callback === */
     ctx.on_root_update = [&](const RootUpdate& upd){
@@ -328,8 +358,8 @@ static void do_search(
             return;
         }
         // best_move = upd.best_move;
-        g_best_move = upd.best_move;
-
+        set_partial_best_move(upd.best_move); //new
+        /*
         auto now = std::chrono::steady_clock::now();
         int64_t elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
             now - search_start
@@ -349,6 +379,7 @@ static void do_search(
             << " currmove " << move_to_str(upd.best_move)
             << " currmovenumber " << upd.move_number;
         send(oss.str());
+        */
     };
 
     int multi_pv = g_multi_pv;
@@ -376,7 +407,7 @@ static void do_search(
         ).count();
 
         best_move = result.best_move;
-        g_best_move = best_move;
+        set_completed_best_move(best_move); //new
         total_nodes += result.nodes;
 
         uint64_t nps = (depth_ms > 0)
@@ -484,20 +515,21 @@ static void do_search(
     }
 
     if(my_gen == g_search_gen.load()){ //revise
+        Move move_to_send = get_completed_best_move(); //new
         bool expected = false;
 
         if(g_bestmove_sent.compare_exchange_strong(expected, true)){
-            send("bestmove " + move_to_str(best_move));
+            send("bestmove " + move_to_str(move_to_send));
         }
     }
-    g_searching = false;
+    g_searching.store(false);
 }
 
 
 /* === Command: go === */
 
 static void cmd_go(std::istringstream& iss){
-    g_ctx.stop = true;
+    g_stop_requested.store(true); //new
     if(g_search_thread.joinable()){
         g_search_thread.join();
     }
@@ -523,11 +555,12 @@ static void cmd_go(std::istringstream& iss){
 
     SearchContext ctx;
     ctx.params = g_params;
-    g_ctx.stop = false;
-    g_searching = true;
-    g_bestmove_sent = false;
+    g_stop_requested.store(false); //new
+    g_searching.store(true);
+    g_bestmove_sent.store(false);
+
     uint32_t gen = g_search_gen.load();
-    g_best_move = Move();
+    
     g_search_thread = std::thread(
         do_search, max_depth, movetime_ms, infinite, gen, ctx, g_board, g_player, g_history, g_step
     );
@@ -682,25 +715,37 @@ void loop(){
         }else if(cmd == "go"){
             cmd_go(iss);
         }else if(cmd == "stop"){
-            g_ctx.stop = true;
+            g_stop_requested.store(true); //new
+            Move move_to_send = get_completed_best_move(); //new
+            
+            bool expected = false;
+            /* If the search thread was interrupted before it could emit
+               bestmove, send one now so the GUI/CLI never hangs. */
+            if(g_bestmove_sent.compare_exchange_strong(expected, true)){
+                send("bestmove " + move_to_str(move_to_send));
+            }
             if(g_search_thread.joinable()){
                 g_search_thread.join();
             }
-            /* If the search thread was interrupted before it could emit
-               bestmove, send one now so the GUI/CLI never hangs. */
-            if(!g_bestmove_sent.load()){
-                g_bestmove_sent = true;
-                send("bestmove " + move_to_str(g_best_move));
-            }
         }else if(cmd == "ucinewgame" || cmd == "ubginewgame"){
+            g_stop_requested.store(true); //new
+
+            if(g_search_thread.joinable()){
+                g_search_thread.join();
+            }
+
             g_board = Board();
             g_player = 0;
             g_step = 0;
             g_history.clear();
+
+            g_searching.store(false);
+            g_bestmove_sent.store(true);
         }else if(cmd == "d"){
             cmd_display();
         }else if(cmd == "quit"){
-            g_ctx.stop = true;
+            g_stop_requested.store(true); //new
+
             if(g_search_thread.joinable()){
                 g_search_thread.join();
             }

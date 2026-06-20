@@ -95,8 +95,8 @@ int MiniMax::eval_ctx(
     if(ply > ctx.seldepth){
         ctx.seldepth = ply;
     }
-    if((ctx.nodes & 2047ULL) == 0){
-        if(ctx.time_up()){
+    if((ctx.nodes & 1023ULL) == 0){
+        if(ctx.should_stop()){
             ctx.stop = true;
         }
     }
@@ -243,8 +243,8 @@ int MiniMax::quiescence(
     if(ply > ctx.seldepth){
         ctx.seldepth = ply;
     }
-    if((ctx.nodes & 2047ULL) == 0){
-        if(ctx.time_up()){
+    if((ctx.nodes & 1023ULL) == 0){
+        if(ctx.should_stop()){
             ctx.stop = true;
         }
     }

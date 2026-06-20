@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <functional>
 #include <chrono>
+#include <atomic>
 
 class State;
 
@@ -24,13 +25,27 @@ struct SearchContext {
     bool has_deadline = false;
     std::chrono::steady_clock::time_point deadline;
 
+    const std::atomic<bool>* external_stop = nullptr;
+
     ParamMap params;
     std::function<void(const RootUpdate&)> on_root_update;
 
     bool time_up() const {
         return has_deadline && std::chrono::steady_clock::now() >= deadline;
     }
-    
+
+    bool should_stop() const {
+        if(stop){
+            return true;
+        }
+
+        if(external_stop != nullptr && external_stop->load()){
+            return true;
+        }
+
+        return time_up();
+    }
+
     void reset(){
         nodes = 0;
         seldepth = 0;
